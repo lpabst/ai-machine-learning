@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>doodle classifier</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+</head>
+<body>
+    <style>
+        .thumb {
+          height: 75px;
+          border: 1px solid #000;
+          margin: 10px 5px 0 0;
+        }
+    </style>
+      
+      <input type="file" id="files" name="files[]" multiple />
+      <output id="list"></output>
+      
+      <script>
+          let trains = {
+              testing: [],
+              training: []
+          };
+
+        function handleFileSelect(evt) {
+          var files = evt.target.files; // FileList object
+          for (var i = 0, f; f = files[i]; i++) {
+      
+            var reader = new FileReader()
+      
+            reader.onload = (function(theFile) {
+                return function(e) {
+                    // create an array from the arrayBuffer
+                    let bytes = new Uint8Array(e.target.result);
+                    // Each spot in the array represents one pixel. Rather than pulling out 
+                    // the RGBA values from this number, I'll just pass the number into the 
+                    // neural network. So we have 784 indexes = 28x28 image = 784 inputs on 
+                    // the neural network. Instead of passing in this number though, the neural
+                    // network wants normalized values between 0-1, so I'll divide each number
+                    // by 255
+                    const numImages = 50;
+                    const imageSize = 784;
+                    const copyBytes = numImages * imageSize;
+                    let copyArray = [];
+                    // bytes is a typed array, so we can't use slice or splice, so instead we 
+                    // view the data and copy it into a new array
+                    for (let j = 0; j <= copyBytes; j++){
+                        if (copyArray.length < 784) {
+                            let info = bytes[j] / 255;
+                            let prettyInfo = (info === 0 || info === 1) ? info : info.toFixed(4);
+                            copyArray.push(prettyInfo)
+                        }
+                        else{
+                            trains.training.push(copyArray.slice())
+                            copyArray = [];
+                        }
+                    }
+                    console.log(trains);
+                    console.log(JSON.stringify(trains.training))
+                };
+            })(f);
+      
+            // Read in the image file
+            reader.readAsArrayBuffer(f);
+          }
+        }
+      
+        document.getElementById('files').addEventListener('change', handleFileSelect, false);
+      </script>
+</body>
+</html>
