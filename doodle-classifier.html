@@ -247,8 +247,11 @@
             
             console.log('correct: ' + correct)
             console.log('incorrect: ' + incorrect)
-            let accuracyPercent = (correct / (correct+incorrect)).toFixed(2) * 100
-            document.getElementById('output').innerText = `accuracy: ${accuracyPercent}%`
+            let accuracyPercent = (correct / (correct+incorrect)).toFixed(2) * 100;
+            let message = 'I dont know anything';
+            if (accuracyPercent > 33 && accuracyPercent < 66) message = 'Im still learning but im not very good yet';
+            if (accuracyPercent > 66) message = 'Im pretty legit!'
+            document.getElementById('output').innerText = `accuracy: ${accuracyPercent}% \n${message}`
             return 'done'
         }
 
