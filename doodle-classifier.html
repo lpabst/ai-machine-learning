@@ -141,8 +141,10 @@
             NEURAL NETWORK SCRIPT
             help taken from coding train videos on YouTube around tensorflow and doodle classifier
         */
-        let epochs = 60; // how many times to train on the data
-        let learningRate = 0.005;
+        let epochs = 20 // how many times to train on the data
+        let shuffle = true
+        let validationSplit = 0.2
+        let learningRate = 0.005
     
         // build your tensorflow model
         const model = tf.sequential();
@@ -169,10 +171,11 @@
         // our labels and training data
         for (let key in window.data){
             labels.push(key);
-            data[key].forEach(arr => {
-                inputs.push(arr);
+            let trainingData = data[key].length * 0.8;
+            for (let i = 0; i < trainingData; i++){
+                inputs.push(data[key][i]);
                 outputs.push(labels.indexOf(key))
-            })
+            }
         }
     
         const train_xs = tf.tensor2d(inputs);
@@ -184,8 +187,8 @@
         function trainModel(loadingDiv) {
             const options = {
                 epochs,
-                shuffle: true,
-                validationSplit: 0.25,
+                shuffle,
+                validationSplit,
                 callbacks: {
                     onEpochEnd: (num, logs) =>
                     console.log("loss after epoch " + num + ": " + logs.loss)
@@ -195,8 +198,72 @@
                 // hide the loading text
                 loadingDiv.style.display = "none";
                 loadingDiv.style.visibility = "hidden";
+                // test the model with testing data
+                testModel();
                 return true;
             });
+        }
+
+        async function testModel(){
+            let labels = []; 
+            let inputs = [];
+            let outputs = [];
+
+            for (let key in window.data){
+                labels.push(key);
+                let testDataStart = Math.floor(data[key].length * 0.8)
+                let testDataEnd = data[key].length
+                for (let i = testDataStart; i < testDataEnd; i++){
+                    data[key][i]
+                    inputs.push(data[key][i]);
+                    outputs.push(labels.indexOf(key))
+                }
+            }
+
+            let correct = 0;
+            let incorrect = 0;
+
+            // turn all of the strings into floats
+            inputs.forEach(arr => {
+                for (let i = 0; i < arr.length; i++){
+                    arr[i] = parseFloat(arr[i])
+                }
+            })
+
+            for (let j = 0; j < inputs.length; j++){
+                await model.predict(tf.tensor2d(inputs[j], [1,784]))
+                .array()
+                .then(([arr]) => {
+                    console.log('expected: ' + outputs[j])
+                    let maxIndex = findMaxIndex(arr);
+                    console.log('guess: ' + maxIndex)
+                    console.log(arr)
+                    // console.log(labels);
+
+                    if (maxIndex === outputs[j]) correct++;
+                    else incorrect++;
+                })
+            }
+            
+            console.log('correct: ' + correct)
+            console.log('incorrect: ' + incorrect)
+            let accuracyPercent = (correct / (correct+incorrect)).toFixed(2) * 100
+            document.getElementById('output').innerText = `accuracy: ${accuracyPercent}%`
+            return 'done'
+        }
+
+        function findMaxIndex(arr){
+            let max = {
+                value: arr[0],
+                index: 0
+            }
+            for (let i = 1; i < arr.length; i++){
+                if (arr[i] > max.value){
+                    max.value = arr[i];
+                    max.index = i;
+                }
+            }
+            return max.index;
         }
     
         function train() {
