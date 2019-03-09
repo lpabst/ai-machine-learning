@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>doodle classifier</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+    <script src="./doodle-data.js"></script>
+</head>
+<body>
+    <canvas id="drawingCanvas" width="400" height="400" style="border:2px solid; background: black;"></canvas>
+    <canvas id='guessingCanvas' width='28' height='28' style='background: #000;'></canvas>
+    <canvas id='testCanvas' width='280' height='280' style='display: none;background: black;'></canvas>
+
+    <button onclick="train()">Train AI</button>
+    <button id="guessButton" onclick="guess()">Guess</button>
+    <button id="testDataButton" onclick="guessTestData()">Test Data</button>
+    <input type="button" value="clear drawing board" id="clr" size="23" onclick="erase()" >
+    <div id='output' ></div>
+
+    <div
+      id="loading"
+      style="position: fixed; font-size: 60px; font-weight: bold; top: 100px; left: 200px; z-index: 9999; color: #444; display: none; visibility: hidden;"
+    >
+      TRAINING AI...
+    </div>
+
+    <script>
+        /*
+            DRAWING ON CANVAS SCRIPT
+            help taken from:
+            https://stackoverflow.com/questions/2368784/draw-on-html5-canvas-using-a-mouse
+        */
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        const lineWidth = 8;
+        let flag, dot_flag, currX, currY, prevX, prevY;
+
+        canvas.addEventListener("mousemove", function (e) {
+            findxy('move', e)
+        }, false);
+        canvas.addEventListener("mousedown", function (e) {
+            findxy('down', e)
+        }, false);
+        canvas.addEventListener("mouseup", function (e) {
+            findxy('up', e)
+        }, false);
+        canvas.addEventListener("mouseout", function (e) {
+            findxy('out', e)
+        }, false);
+        
+        function draw() {
+            ctx.beginPath();
+            ctx.moveTo(prevX, prevY);
+            ctx.lineTo(currX, currY);
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = lineWidth;
+            ctx.stroke();
+            ctx.closePath();
+        }
+        
+        function findxy(eventType, e) {
+            if (eventType == 'down') {
+                prevX = currX;
+                prevY = currY;
+                currX = e.clientX - canvas.offsetLeft;
+                currY = e.clientY - canvas.offsetTop;
+        
+                flag = true;
+                dot_flag = true;
+                if (dot_flag) {
+                    ctx.beginPath();
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(currX, currY, lineWidth,lineWidth);
+                    ctx.closePath();
+                    dot_flag = false;
+                }
+            }
+            if (eventType == 'up' || eventType == "out") {
+                flag = false;
+            }
+            if (eventType == 'move') {
+                if (flag) {
+                    prevX = currX;
+                    prevY = currY;
+                    currX = e.clientX - canvas.offsetLeft;
+                    currY = e.clientY - canvas.offsetTop;
+                    draw();
+                }
+            }
+        }
+
+        function erase(){
+            ctx.clearRect(0, 0, w, h);
+        }
+
+        function drawImageFromTestData(testPic, targetCanvasId = 'testCanvas'){
+            // draw a cat or two
+            let imageData2 = new ImageData(28, 28);
+            let testCanvas = document.getElementById(targetCanvasId);
+            let testCtx = testCanvas.getContext('2d');
+            
+            let rgbaArray = convertNormalizedArrToRgba(testPic)
+            for (let i = 0; i < rgbaArray.length; i++){
+                imageData2.data[i] = rgbaArray[i];
+            }
+            
+            // Initialize a new ImageData object
+            testCtx.putImageData(imageData2, 0, 0);
+        }
+        drawImageFromTestData(data.cats[0]);
+
+        function convertNormalizedArrToRgba(normalizedArr){
+            let rgba = [];
+            for (let i = 0; i < normalizedArr.length; i ++) {
+                rgba[i*4 + 0] = normalizedArr[i]*255;    // R value
+                rgba[i*4 + 1] = normalizedArr[i]*255;  // G value
+                rgba[i*4 + 2] = normalizedArr[i]*255;    // B value
+                rgba[i*4 + 3] = 255;  // A value
+            }
+            return rgba;
+        }
+
+        function convertRgbaArrToNormalizedData(rgbaArray){
+            let normalizedArr = [];
+            for (let i = 0; i < rgbaArray.length; i+=4){
+                let lowestVal = Math.min(rgbaArray[i], rgbaArray[i+1], rgbaArray[i+2], rgbaArray[i+3]);
+                let data = lowestVal / 255;
+                normalizedArr[i/4] = (data === 0 || data === 1) ? data : data.toFixed(4)
+            }
+            return normalizedArr;
+        }
+
+    </script>
+
+    <script>
+        /*
+            NEURAL NETWORK SCRIPT
+            help taken from coding train videos on YouTube around tensorflow and doodle classifier
+        */
+        let epochs = 60; // how many times to train on the data
+        let learningRate = 0.005;
+    
+        // build your tensorflow model
+        const model = tf.sequential();
+        const optimizer = tf.train.adam(learningRate);
+        const hidden = tf.layers.dense({
+            inputDim: 784,
+            units: 64,
+            activation: "sigmoid"
+        });
+        const output = tf.layers.dense({
+            units: 3,
+            activation: "softmax"
+        });
+    
+        model.add(hidden);
+        model.add(output);
+        model.compile({ loss: "categoricalCrossentropy", optimizer });
+
+        let labels = []; // will end up looking like [trains, cats, rainbows...]
+        let inputs = [];
+        let outputs = [];
+
+        // use the data on the window object (pulled in from doodle-data.js) to build 
+        // our labels and training data
+        for (let key in window.data){
+            labels.push(key);
+            data[key].forEach(arr => {
+                inputs.push(arr);
+                outputs.push(labels.indexOf(key))
+            })
+        }
+    
+        const train_xs = tf.tensor2d(inputs);
+        const outputsTensor = tf.tensor1d(outputs, "int32");
+        const train_ys = tf.oneHot(outputsTensor, labels.length);
+        outputsTensor.dispose();
+    
+        // train the ai
+        function trainModel(loadingDiv) {
+            const options = {
+                epochs,
+                shuffle: true,
+                validationSplit: 0.25,
+                callbacks: {
+                    onEpochEnd: (num, logs) =>
+                    console.log("loss after epoch " + num + ": " + logs.loss)
+                }
+            };
+            model.fit(train_xs, train_ys, options).then(result => {
+                // hide the loading text
+                loadingDiv.style.display = "none";
+                loadingDiv.style.visibility = "hidden";
+                return true;
+            });
+        }
+    
+        function train() {
+            let loading = document.getElementById("loading");
+            loading.style.display = "inline";
+            loading.style.visibility = "visible";
+            trainModel(loading);
+        }
+
+        // draws one of the test images onto the guessingCanvas for the ai to try and guess
+        function guessTestData(){
+            tf.tidy(() => {
+                let destCanvas = document.getElementById('guessingCanvas');
+                let destCtx = destCanvas.getContext('2d');
+
+                let randomCategory = labels[Math.floor(Math.random() * 3)];
+                let randomPicture = Math.floor(Math.random() * 49);
+                let randomTrainingTest = data[randomCategory][randomPicture];
+                drawImageFromTestData(randomTrainingTest, 'guessingCanvas');
+
+                let imageData = destCtx.getImageData(0, 0, destCanvas.width, destCanvas.height);
+                let rgbaValues = imageData.data;  
+                let inputBytes = convertRgbaArrToNormalizedData(rgbaValues);
+                
+                model
+                .predict(tf.tensor2d(inputBytes, [1, 784]))
+                .array()
+                .then(([arr]) => {
+                    console.log('\n'+randomCategory);
+                    console.log(arr)
+                    console.log(labels);
+                    let output = `Expected: ${randomCategory}\nactual: `;
+                    arr.forEach((confidence, index) => {
+                        output += labels[index] + ': ' + confidence.toFixed(2) + ' | ';
+                    })
+                    document.getElementById('output').innerText = output;
+                    drawImageFromTestData(randomTrainingTest, 'guessingCanvas')
+                });
+            });
+        }
+    
+        function guess() {
+            tf.tidy(() => {
+                // copy drawing onto 28x28 canvas
+                let srcCanvas = document.getElementById('drawingCanvas');
+                let destCanvas = document.getElementById('guessingCanvas');
+                let srcCtx = srcCanvas.getContext('2d');
+                let destCtx = destCanvas.getContext('2d');
+                destCtx.drawImage(srcCanvas, 0, 0, destCanvas.width, destCanvas.height);
+
+                // get pixel data for 28x28 canvas
+                let imageData = destCtx.getImageData(0, 0, destCanvas.width, destCanvas.height);
+                let rgbaValues = imageData.data;
+                let inputBytes = convertRgbaArrToNormalizedData(rgbaValues);
+
+                model
+                    .predict(tf.tensor2d(inputBytes, [1, 784]))
+                    .array()
+                    .then(([arr]) => {
+                        console.log(arr)
+                        console.log(labels);
+                        let output = '| ';
+                        arr.forEach((confidence, index) => {
+                            output += labels[index] + ': ' + confidence.toFixed(2) + ' | ';
+                        })
+                        document.getElementById('output').innerText = output;
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
